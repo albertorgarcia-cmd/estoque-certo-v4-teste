@@ -1,0 +1,10 @@
+ESTOQUE CERTO V4 - TESTE ISOLADO
+
+Nao envie estes arquivos ao repositorio principal ainda.
+Esta versao e experimental, para testar cadastro por camera e cadastro em sequencia.
+Ela deve ser publicada em um endereco de teste separado para preservar a V3 e os dados locais.
+Nao use dados reais sem backup.
+
+Melhorias: camera no formulario de cadastro; codigo manual permanece; aviso de codigo ja cadastrado; salvar e cadastrar outro.
+
+O pagamento e o limite gratuito NAO foram implementados nesta etapa.
