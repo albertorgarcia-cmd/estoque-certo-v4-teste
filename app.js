@@ -133,7 +133,7 @@
   function productForm(code, draft = null) {
     const p=state.products.find(p=>p.codigo===code),values=draft || (p?{...p,custo:(p.custoCentavos/100).toFixed(2).replace('.',',')}:{ });
     const labels=[['codigo','Código do produto','Ex.: 000123'],['descricao','Descrição','Ex.: Caneca de cerâmica azul'],['categoria','Categoria','Ex.: Presentes'],['localizacao','Localização','Ex.: A-01'],['unidade','Unidade','Ex.: UN'],['custo','Custo unitário (R$)','Ex.: 12,90'],['quantidade','Quantidade registrada','Ex.: 0']];
-    openModal(p?'Editar produto':'Cadastrar produto',`<form id="product-form" data-code="${esc(code||'')}"><div class="form-grid">${labels.map(([key,label,placeholder])=>`<div class="field ${key==='descricao'?'full':''}"><label for="f-${key}">${label}</label><input id="f-${key}" name="${key}" value="${esc(values[key]??'')}" placeholder="${placeholder}" required ${key==='codigo'&&p?'readonly':''} ${['custo','quantidade'].includes(key)?'inputmode="decimal"':`maxlength="${key==='descricao'?120:key==='unidade'?12:60}"`}>${key==='codigo'&&!p?'<button type="button" class="btn" data-action="scan-product" style="margin-top:8px">'+icon('camera')+' Ler código pela câmera</button>':''}</div>`).join('')}</div><p class="help-text">${p?'O código é fixo. Alterações não modificam inventários já criados.':'Todos os campos são obrigatórios. Zero é uma quantidade válida.'}</p><p id="form-error" class="form-error" role="alert"></p><div class="form-actions">${btn('Cancelar','cancel')}<button class="btn primary">Salvar produto</button>${!p?'<button type="button" class="btn" data-action="save-next">Salvar e cadastrar outro</button>':''}</div></form>`);
+    openModal(p?'Editar produto':'Cadastrar produto',`<form id="product-form" data-code="${esc(code||'')}"><div class="form-grid">${labels.map(([key,label,placeholder])=>`<div class="field ${key==='descricao'?'full':''}"><label for="f-${key}">${label}</label><input id="f-${key}" name="${key}" value="${esc(values[key]??'')}" placeholder="${placeholder}" required ${key==='codigo'&&p?'readonly':''} ${['custo','quantidade'].includes(key)?'inputmode="decimal"':`maxlength="${key==='descricao'?120:key==='unidade'?12:60}"`}>${key==='codigo'&&!p?'<button type="button" class="btn" data-action="scan-product" style="margin-top:8px">'+icon('camera')+' Ler código pela câmera</button>':''}</div>`).join('')}</div><p class="help-text">${p?'O código é fixo. Alterações não modificam inventários já criados.':'Todos os campos são obrigatórios. Zero é uma quantidade válida.'}</p><p id="form-error" class="form-error" role="alert"></p><div class="form-actions">${btn('Cancelar','cancel')}<button class="btn primary">Salvar produto</button>${!p?'<button type="submit" class="btn" data-save-next="true">Salvar e cadastrar outro</button>':''}</div></form>`);
   }
   function newInventory() {
     openModal('Novo inventário físico',`<form id="inventory-form"><div class="notice">Uma nova contagem com os <strong>${state.products.length} produtos</strong> cadastrados. Todos começam pendentes. Inventários anteriores serão preservados.</div><div class="field"><label for="inventory-name">Nome do inventário</label><input id="inventory-name" name="name" required maxlength="80" value="Inventário de ${new Date().toLocaleDateString('pt-BR')}" autocomplete="off"></div><p class="help-text">Custos, quantidades e localizações serão copiados para esta contagem. O cadastro continuará independente.</p><p id="form-error" class="form-error" role="alert"></p><div class="form-actions">${btn('Cancelar','cancel')}<button class="btn primary">Criar inventário</button></div></form>`);
@@ -292,7 +292,6 @@
     if(a==='template')download(E.productsCSV([{codigo:'000123',descricao:'Produto de exemplo',categoria:'Presentes',localizacao:'A-01',unidade:'UN',custoCentavos:1290,quantidade:0}]),'modelo-produtos.csv','text/csv;charset=utf-8');
     if(a==='scan')scan();
     if(a==='scan-product'){const f=$('#product-form');if(f){productDraft=Object.fromEntries(new FormData(f));scan('product');}}
-    if(a==='save-next'){$('#product-form')?.requestSubmit();if(!$('#product-form'))productForm();}
     if(a==='raw-backup'){try{download(localStorage.getItem(E.KEY)||'Nenhum dado encontrado.','estoque-certo-conteudo-local-original.txt');}catch(e){toast('O navegador bloqueou a leitura dos dados locais.');}}
     if(a==='close-inventory'){
       const inv=inventory();if(!inv)return;const pending=E.totals(inv).pending;
@@ -348,10 +347,11 @@
   document.addEventListener('submit',event=>{
     const form=event.target;event.preventDefault();
     if(form.id==='product-form'){
+      const saveNext=event.submitter?.dataset.saveNext==='true';
       try {const p=E.product(Object.fromEntries(new FormData(form)));const code=form.dataset.code;
         if(!code&&state.products.some(x=>x.codigo===p.codigo))throw new Error('Este código já está cadastrado. Use Editar para atualizar.');
         if(code&&!confirm('Salvar as alterações do cadastro de '+p.descricao+'? Os inventários existentes permanecerão com os dados originais.'))return;
-        if(commit(s=>s.products=E.mergeProducts(s.products,[p],!!code))){closeModal();render();toast('Produto salvo no cadastro.');}
+        if(commit(s=>s.products=E.mergeProducts(s.products,[p],!!code))){closeModal();render();toast('Produto salvo no cadastro.');if(saveNext)setTimeout(()=>{productForm();$('#f-codigo')?.focus();},0);}
       }catch(e){$('#form-error').textContent=e.message;}
     }
     if(form.id==='inventory-form'){
