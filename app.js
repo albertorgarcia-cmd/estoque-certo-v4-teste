@@ -32,6 +32,9 @@
   let cameraStream = null, scanTimer = null, storageBlocked = false, importResult = null, installEvent = null, storageBaseline = null;
   let csvReadVersion = 0, restoreReadVersion = 0;
   const pageSize = 15;
+  const FREE_PRODUCT_LIMIT = 30;
+  const freeLimitMessage = () => `Limite gratuito de ${FREE_PRODUCT_LIMIT} produtos atingido. Seus dados continuam disponíveis para consulta, edição, contagem, exportação e backup. O desbloqueio pago ainda não está disponível nesta versão de teste.`;
+  const freeLimitReached = () => state.products.length >= FREE_PRODUCT_LIMIT;
   const titles = {
     inicio:['Seu estoque, em dia.','Uma visão clara para cuidar do que faz seu comércio girar.','CADA PRODUTO NO SEU LUGAR','Visão geral'],
     produtos:['Produtos bem organizados.','Cadastre, encontre e importe os produtos do seu comércio.','A BASE DE UM BOM CONTROLE','Produtos'],
@@ -112,7 +115,7 @@
   function pagination(p) { return `<div class="pagination"><span>${p.total?((page-1)*pageSize+1)+'–'+Math.min(page*pageSize,p.total):'0'} de ${p.total} produtos</span><div><button class="btn small" data-action="prev" ${page===1?'disabled':''} aria-label="Página anterior">←</button><span>${page} / ${p.pages}</span><button class="btn small" data-action="next" ${page===p.pages?'disabled':''} aria-label="Próxima página">→</button></div></div>`; }
   function productsView() {
     const p=paginate(filtered(state.products));
-    view.innerHTML=`<article class="card"><div class="section-head"><div><h2>Catálogo de produtos</h2><p>${state.products.length} produtos · altere o cadastro sem mudar inventários existentes</p></div><div class="toolbar-group">${btn('Importar CSV','import','','upload')}${btn('Cadastrar','add-product','primary','plus')}</div></div>${filterToolbar(state.products)}<div class="table-wrap"><table><thead><tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th class="numeric">Custo</th><th class="numeric">Quantidade</th><th>Ação</th></tr></thead><tbody>${p.rows.map(r=>`<tr><td>${productCell(r)}</td><td>${esc(r.categoria)}</td><td>${esc(r.unidade)}</td><td class="numeric">${money(r.custoCentavos)}</td><td class="numeric">${num(r.quantidade)}</td><td><button class="icon-btn" data-edit="${esc(r.codigo)}" aria-label="Editar ${esc(r.descricao)}">${icon('edit')}</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">Nenhum produto encontrado.</td></tr>'}</tbody></table></div>${pagination(p)}</article><p class="help-text">Valores calculados a custo de aquisição. Quantidades aceitam zero e até três casas decimais. Códigos preservam zeros à esquerda.</p>`;
+    view.innerHTML=`<div class="notice ${freeLimitReached()?'warning':''}"><strong>Plano gratuito de testes:</strong> ${state.products.length} / ${FREE_PRODUCT_LIMIT} produtos. ${freeLimitReached()?'O limite de novos cadastros foi atingido. Os produtos existentes permanecem acessíveis. Esta demonstração começa com 100 produtos fictícios; nenhum deles será apagado.':'Você pode cadastrar até '+(FREE_PRODUCT_LIMIT-state.products.length)+' novos produtos.'} <strong>O pagamento ainda não está habilitado.</strong></div><article class="card"><div class="section-head"><div><h2>Catálogo de produtos</h2><p>${state.products.length} produtos · altere o cadastro sem mudar inventários existentes</p></div><div class="toolbar-group">${btn('Importar CSV','import','','upload')}${btn('Cadastrar','add-product','primary','plus')}</div></div>${filterToolbar(state.products)}<div class="table-wrap"><table><thead><tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th class="numeric">Custo</th><th class="numeric">Quantidade</th><th>Ação</th></tr></thead><tbody>${p.rows.map(r=>`<tr><td>${productCell(r)}</td><td>${esc(r.categoria)}</td><td>${esc(r.unidade)}</td><td class="numeric">${money(r.custoCentavos)}</td><td class="numeric">${num(r.quantidade)}</td><td><button class="icon-btn" data-edit="${esc(r.codigo)}" aria-label="Editar ${esc(r.descricao)}">${icon('edit')}</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">Nenhum produto encontrado.</td></tr>'}</tbody></table></div>${pagination(p)}</article><p class="help-text">Valores calculados a custo de aquisição. Quantidades aceitam zero e até três casas decimais. Códigos preservam zeros à esquerda.</p>`;
   }
   function countView() {
     const inv=inventory();if(!inv){view.innerHTML=empty('Nenhum inventário criado','Comece um inventário para registrar as contagens.',btn('Novo inventário','new-inventory','primary','plus'));return;}
@@ -139,6 +142,7 @@
     openModal('Novo inventário físico',`<form id="inventory-form"><div class="notice">Uma nova contagem com os <strong>${state.products.length} produtos</strong> cadastrados. Todos começam pendentes. Inventários anteriores serão preservados.</div><div class="field"><label for="inventory-name">Nome do inventário</label><input id="inventory-name" name="name" required maxlength="80" value="Inventário de ${new Date().toLocaleDateString('pt-BR')}" autocomplete="off"></div><p class="help-text">Custos, quantidades e localizações serão copiados para esta contagem. O cadastro continuará independente.</p><p id="form-error" class="form-error" role="alert"></p><div class="form-actions">${btn('Cancelar','cancel')}<button class="btn primary">Criar inventário</button></div></form>`);
   }
   function importModal() {
+    if (freeLimitReached()) { toast(freeLimitMessage()); return; }
     importResult=null;
     openModal('Importar produtos por CSV',`<p class="help-text">Selecione um CSV em UTF-8, com até 10.000 linhas e 5 MB. Separador ponto e vírgula ou vírgula. O arquivo inteiro precisa ser válido antes da importação.</p><p class="help-text">Cabeçalhos: <code>codigo;descricao;categoria;localizacao;unidade;custo;quantidade</code><br>Use <code>12,90</code> com separador ponto e vírgula. Não use separadores de milhar.</p>${btn('Baixar modelo CSV','template','small','download')}<label class="file-zone">Arquivo de produtos<input type="file" id="csv-file" accept=".csv,text/csv"></label><div id="import-preview" aria-live="polite"></div><div class="form-actions">${btn('Cancelar','cancel')}<button class="btn primary" id="confirm-import" disabled>Importar produtos</button></div>`);
   }
@@ -321,8 +325,10 @@
       importResult=null;$('#confirm-import').disabled=true;
       try {const content=await readFile(el,5*1024*1024);if(version!==csvReadVersion||content===null)return;const result=E.parseCSV(content);if(!$('#import-preview'))return;importResult=result;
         const overlaps=result.products.filter(p=>state.products.some(x=>x.codigo===p.codigo)).length;
-        $('#import-preview').innerHTML=`<div class="notice ${result.errors.length?'error':''}"><strong>${result.total} registro(s) encontrado(s).</strong> ${result.errors.length?'Corrija os erros e selecione o arquivo novamente. Nenhum dado será importado.':(result.products.length-overlaps)+' novos · '+overlaps+' códigos existentes para atualizar.'}</div>${result.errors.length?'<ul class="import-summary">'+result.errors.slice(0,40).map(e=>'<li>'+esc(e)+'</li>').join('')+'</ul>':`<p class="help-text">Prévia: ${result.products.slice(0,3).map(p=>esc(p.codigo)+' · '+esc(p.descricao)).join('<br>')}</p><p class="help-text">Inventários já criados não serão alterados.</p>`}${result.errors.length>40?'<p>Exibindo os primeiros 40 erros.</p>':''}`;
-        $('#confirm-import').disabled=!!result.errors.length;
+        const newCount=result.products.length-overlaps;
+        const overLimit=state.products.length+newCount>FREE_PRODUCT_LIMIT;
+        $('#import-preview').innerHTML=`<div class="notice ${result.errors.length?'error':''}"><strong>${result.total} registro(s) encontrado(s).</strong> ${result.errors.length?'Corrija os erros e selecione o arquivo novamente. Nenhum dado será importado.':newCount+' novos · '+overlaps+' códigos existentes para atualizar.'} ${overLimit?'A importação ultrapassa o limite gratuito de '+FREE_PRODUCT_LIMIT+' produtos.':''}</div>${result.errors.length?'<ul class="import-summary">'+result.errors.slice(0,40).map(e=>'<li>'+esc(e)+'</li>').join('')+'</ul>':`<p class="help-text">Prévia: ${result.products.slice(0,3).map(p=>esc(p.codigo)+' · '+esc(p.descricao)).join('<br>')}</p><p class="help-text">Inventários já criados não serão alterados.</p>`}${result.errors.length>40?'<p>Exibindo os primeiros 40 erros.</p>':''}`;
+        $('#confirm-import').disabled=!!result.errors.length||overLimit;
       }catch(e){if(version===csvReadVersion&&$('#import-preview'))$('#import-preview').innerHTML='<p class="form-error">'+esc(e.message)+'</p>';}
     }
     if(el.id==='restore-file'){
@@ -340,6 +346,7 @@
   $('#modal-content').addEventListener('click',event=>{
     if(event.target.closest('#confirm-import')&&importResult&&!importResult.errors.length){
       const overlaps=importResult.products.filter(p=>state.products.some(x=>x.codigo===p.codigo)).length;
+      if(state.products.length+importResult.products.length-overlaps>FREE_PRODUCT_LIMIT){toast(freeLimitMessage());return;}
       if(!confirm(`Importar ${importResult.products.length} produtos? ${overlaps?overlaps+' códigos existentes terão seus dados substituídos. ':''}Inventários anteriores serão preservados.`))return;
       if(commit(s=>s.products=E.mergeProducts(s.products,importResult.products,true))){closeModal();navigate('produtos');toast('Produtos importados e salvos.');}
     }
@@ -350,6 +357,7 @@
       const saveNext=event.submitter?.dataset.saveNext==='true';
       try {const p=E.product(Object.fromEntries(new FormData(form)));const code=form.dataset.code;
         if(!code&&state.products.some(x=>x.codigo===p.codigo))throw new Error('Este código já está cadastrado. Use Editar para atualizar.');
+        if(!code&&freeLimitReached())throw new Error(freeLimitMessage());
         if(code&&!confirm('Salvar as alterações do cadastro de '+p.descricao+'? Os inventários existentes permanecerão com os dados originais.'))return;
         if(commit(s=>s.products=E.mergeProducts(s.products,[p],!!code))){closeModal();render();toast('Produto salvo no cadastro.');if(saveNext)setTimeout(()=>{productForm();$('#f-codigo')?.focus();},0);}
       }catch(e){$('#form-error').textContent=e.message;}
